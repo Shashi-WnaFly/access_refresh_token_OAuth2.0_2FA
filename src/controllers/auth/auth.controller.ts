@@ -2,7 +2,7 @@ import type { Request, Response } from "express";
 import userModel from "../../models/user.js";
 import { success, z } from "zod";
 import jwt from "jsonwebtoken";
-import { loginSchema, registerSchema } from "./auth.schema.js";
+import { isStrongPasswordSchema, loginSchema, registerSchema } from "./auth.schema.js";
 import { compareHash, passwordHash } from "../../lib/hash.js";
 import { SendEmail } from "../../lib/email.js";
 import config from "../../config/config.js";
@@ -286,7 +286,7 @@ export function logoutHandler(_req: Request, res: Response) {
   });
 }
 
-export async function resetPasswordHandler(req: Request, res: Response) {
+export async function forgotPasswordHandler(req: Request, res: Response) {
   const { email } = req.body as { email: string };
   const normalizeEmail = email.trim().toLowerCase();
 
@@ -333,6 +333,60 @@ export async function resetPasswordHandler(req: Request, res: Response) {
       success: true,
       message:
         "If an account with this email exists, we will send you a reset link",
+    });
+  } catch (error) {
+    console.log("Error: ", (error as Error).message);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+}
+
+export async function resetPasswordHandler(req: Request, res: Response) {
+  const { token, password } = req.body as { token?: string; password: string };
+
+  if (!token || !password) {
+    return res.status(400).json({
+      success: true,
+      message: "token or password is missing",
+    });
+  }
+
+  try {
+    const isStrongPassword = isStrongPasswordSchema.safeParse({password});
+
+    if (!isStrongPassword.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Password should be strong",
+      });
+    }
+
+    const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+
+    const user = await userModel.findOne({
+      resetPasswordToken: tokenHash,
+      resetPasswordExpires: { $gt: new Date() },
+    });
+
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: "Reset token is invalid or expired!",
+      });
+    }
+
+    user.passwordHash = await passwordHash(password);
+    user.resetPasswordExpires = null;
+    user.resetPasswordToken = null;
+    user.tokenVersion = user.tokenVersion + 1;
+
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Your password reset successfully",
     });
   } catch (error) {
     console.log("Error: ", (error as Error).message);

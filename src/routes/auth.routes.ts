@@ -7,6 +7,7 @@ router.post("/login", authRouter.loginHandler);
 router.get("/verify-email", authRouter.verifyEmailHandler);
 router.post("/refresh", authRouter.refreshHandler);
 router.post("/logout", authRouter.logoutHandler);
-router.post("/forgot-password", authRouter.resetPasswordHandler);
+router.post("/forgot-password", authRouter.forgotPasswordHandler);
+router.post("/reset-password", authRouter.resetPasswordHandler);
 
 export default router;
