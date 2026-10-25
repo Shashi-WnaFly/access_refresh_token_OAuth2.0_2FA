@@ -9,6 +9,12 @@ if (
 if (!process.env.PORT) throw new Error("Server's port is not available.");
 if (!process.env.NODE_ENV) throw new Error("Node env is not available.");
 if (!process.env.APP_URL) throw new Error("App url is not available.");
+if (
+  !process.env.GOOGLE_CLIENT_ID ||
+  !process.env.GOOGLE_CLIENT_SECRET ||
+  !process.env.GOOGLE_REDIRECT_URI
+)
+  throw new Error("Google Oauth envs are missing");
 
 const config = {
   PORT: process.env.PORT,
@@ -19,6 +25,9 @@ const config = {
   SENDER_EMAIL: process.env.SENDER_EMAIL,
   NODE_ENV: process.env.NODE_ENV,
   APP_URL: process.env.APP_URL,
+  GOOGLE_REDIRECT_URI: process.env.GOOGLE_REDIRECT_URI,
+  GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID,
+  GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET,
 };
 
 export default config;

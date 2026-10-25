@@ -12,9 +12,6 @@ function requireRole(role: string) {
       });
     }
 
-    // console.log(reqAuth.role);
-    // console.log(role);
-
     if (reqUser.role !== role) {
       return res.status(403).json({
         success: false,

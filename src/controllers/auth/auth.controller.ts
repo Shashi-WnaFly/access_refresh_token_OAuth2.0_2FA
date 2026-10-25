@@ -1,8 +1,12 @@
 import type { Request, Response } from "express";
 import userModel from "../../models/user.js";
-import { success, z } from "zod";
+import { z } from "zod";
 import jwt from "jsonwebtoken";
-import { isStrongPasswordSchema, loginSchema, registerSchema } from "./auth.schema.js";
+import {
+  isStrongPasswordSchema,
+  loginSchema,
+  registerSchema,
+} from "./auth.schema.js";
 import { compareHash, passwordHash } from "../../lib/hash.js";
 import { SendEmail } from "../../lib/email.js";
 import config from "../../config/config.js";
@@ -12,9 +16,18 @@ import {
   verifyRefreshToken,
 } from "../../lib/token.js";
 import crypto from "crypto";
+import { OAuth2Client } from "google-auth-library";
 
-function getAppUrl() {
+function getAppUrl(): string {
   return config.APP_URL || `http://localhost:${config.PORT}`;
+}
+
+function getGoogleClient() {
+  return new OAuth2Client({
+    client_id: config.GOOGLE_CLIENT_ID,
+    client_secret: config.GOOGLE_CLIENT_SECRET,
+    redirectUri: config.GOOGLE_REDIRECT_URI,
+  });
 }
 
 export async function registerHandler(req: Request, res: Response) {
@@ -354,7 +367,7 @@ export async function resetPasswordHandler(req: Request, res: Response) {
   }
 
   try {
-    const isStrongPassword = isStrongPasswordSchema.safeParse({password});
+    const isStrongPassword = isStrongPasswordSchema.safeParse({ password });
 
     if (!isStrongPassword.success) {
       return res.status(400).json({
@@ -396,4 +409,3 @@ export async function resetPasswordHandler(req: Request, res: Response) {
     });
   }
 }
-
