@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import userModel from "../../models/user.js";
-import { z } from "zod";
+import { success, z } from "zod";
 import jwt from "jsonwebtoken";
 import {
   isStrongPasswordSchema,
@@ -401,6 +401,122 @@ export async function resetPasswordHandler(req: Request, res: Response) {
       success: true,
       message: "Your password reset successfully",
     });
+  } catch (error) {
+    console.log("Error: ", (error as Error).message);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+}
+
+export async function googleAuthStartHandler(_req: Request, res: Response) {
+  try {
+    const client = getGoogleClient();
+
+    const url = client.generateAuthUrl({
+      access_type: "offline",
+      prompt: "consent",
+      scope: ["openid", "email", "profile"],
+    });
+
+    return res.redirect(url);
+  } catch (error) {
+    console.log("Error: ", (error as Error).message);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+}
+
+export async function googleAuthCallbackHandler(req: Request, res: Response) {
+  const code = req.query.code as string | undefined;
+
+  if (!code) {
+    return res.status(400).json({
+      success: false,
+      message: "Missing code in callback",
+    });
+  }
+  try {
+    const client = getGoogleClient();
+
+    const { tokens } = await client.getToken(code);
+
+    if (!tokens.id_token) {
+      return res.status(400).json({
+        success: false,
+        message: "No google's id_token is present",
+      });
+    }
+
+    const ticket = await client.verifyIdToken({
+      idToken: tokens.id_token,
+      audience: config.GOOGLE_CLIENT_ID as string,
+    });
+
+    const payload = ticket.getPayload();
+    const email = payload?.email;
+    const emailVerified = payload?.email_verified;
+
+    if (!email || !emailVerified) {
+      return res.status(400).json({
+        success: false,
+        message: "Google email account is not verified.",
+      });
+    }
+
+    const normalizedEmail = email.toLowerCase().trim();
+
+    let user = await userModel.findOne({ email: normalizedEmail });
+
+    if (!user) {
+      const randomPassword = crypto.randomBytes(16).toString("hex");
+      const hashPassword = await passwordHash(randomPassword);
+
+      user = await userModel.create({
+        email: normalizedEmail,
+        passwordHash: hashPassword,
+        isEmailVerified: true,
+      });
+    } else {
+      if (!user.isEmailVerified) {
+        user.isEmailVerified = true;
+        await user.save();
+      }
+    }
+
+    const accessToken = createAccessToken(
+      user.id,
+      user.role as "user" | "admin",
+      user.tokenVersion,
+    );
+
+    const refreshToken = createRefreshToken(user.id, user.tokenVersion);
+
+    res.cookie("refreshToken", refreshToken, {
+      httpOnly: true,
+      secure: config.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Google login successfully",
+      accessToken,
+      user: {
+        id: user._id,
+        email: user.email,
+        isEmailVerified: user.isEmailVerified,
+        name: user.name,
+        role: user.role,
+        twoFactorEnabled: user.twoFactorEnabled,
+      },
+    });
+
+
   } catch (error) {
     console.log("Error: ", (error as Error).message);
     return res.status(500).json({

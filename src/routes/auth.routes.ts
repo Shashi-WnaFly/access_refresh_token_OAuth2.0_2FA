@@ -9,5 +9,7 @@ router.post("/refresh", authRouter.refreshHandler);
 router.post("/logout", authRouter.logoutHandler);
 router.post("/forgot-password", authRouter.forgotPasswordHandler);
 router.post("/reset-password", authRouter.resetPasswordHandler);
+router.get("/google", authRouter.googleAuthStartHandler);
+router.post("/google/callback", authRouter.googleAuthCallbackHandler);
 
 export default router;
