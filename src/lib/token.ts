@@ -10,6 +10,14 @@ export function createAccessToken(
   return jwt.sign(payload, config.JWT_SECRET, { expiresIn: "30m" });
 }
 
+export function verifyAccessToken(token: string) {
+  return jwt.verify(token, config.JWT_SECRET) as {
+    sub: string;
+    role: string;
+    tokenVersion: number;
+  };
+}
+
 export function createRefreshToken(userId: string, tokenVersion: number) {
   const payload = { sub: userId, tokenVersion };
   return jwt.sign(payload, config.JWT_SECRET, { expiresIn: "7d" });
