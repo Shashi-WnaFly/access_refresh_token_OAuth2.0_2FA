@@ -8,13 +8,16 @@ function requireRole(role: string) {
     if (!reqUser) {
       return res.status(401).json({
         success: true,
-        message: "You are not a auth user.",
+        message: "You are not a auth user. Invalid request.",
       });
     }
 
-    if (reqAuth.role !== role) {
+    // console.log(reqAuth.role);
+    // console.log(role);
+
+    if (reqUser.role !== role) {
       return res.status(403).json({
-        success: true,
+        success: false,
         message: "Request forbidden",
       });
     }
