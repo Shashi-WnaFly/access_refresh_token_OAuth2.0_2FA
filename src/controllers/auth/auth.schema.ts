@@ -13,6 +13,7 @@ export const loginSchema = z.object({
   password: z
     .string()
     .regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,64}$/),
+  twoFactorCode: z.string().optional(),
 });
 
 export const isStrongPasswordSchema = z.object({

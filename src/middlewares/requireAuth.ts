@@ -35,7 +35,7 @@ async function requireAuth(req: Request, res: Response, next: NextFunction) {
 
     const authReq = req as any;
     authReq.user = {
-      _id: user._id,
+      id: user.id,
       name: user.name,
       role: user.role,
       email: user.email,

@@ -16,7 +16,7 @@ export async function getUsers(_req: Request, res: Response) {
       .sort({ createdAt: -1 });
 
     const result = users.map((u) => ({
-      _id: u._id,
+      id: u.id,
       email: u.email,
       role: u.role,
       isEmailVerified: u.isEmailVerified,

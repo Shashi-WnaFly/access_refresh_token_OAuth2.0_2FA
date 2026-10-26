@@ -2,7 +2,7 @@
   "name": "access_refresh_token",
   "version": "1.0.0",
   "description": "",
-  "main": "server.js",
+  "main": "src/server.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "nodemon --exec tsx src/server.ts"
@@ -24,6 +24,8 @@
     "mongoose": "^9.11.2",
     "morgan": "^1.12.1",
     "nodemailer": "^10.2.1",
+    "otplib": "^13.5.0",
+    "qrcode": "^1.5.4",
     "zod": "^4.6.7"
   },
   "devDependencies": {

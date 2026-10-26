@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import userModel from "../../models/user.js";
-import { success, z } from "zod";
+import { z } from "zod";
 import jwt from "jsonwebtoken";
 import {
   isStrongPasswordSchema,
@@ -17,6 +17,7 @@ import {
 } from "../../lib/token.js";
 import crypto from "crypto";
 import { OAuth2Client } from "google-auth-library";
+import { generateSecret, generateURI } from "otplib";
 
 function getAppUrl(): string {
   return config.APP_URL || `http://localhost:${config.PORT}`;
@@ -61,7 +62,7 @@ export async function registerHandler(req: Request, res: Response) {
     });
 
     const verifyToken = jwt.sign(
-      { sub: savedUser._id },
+      { sub: savedUser.id },
       process.env.JWT_SECRET!,
       { expiresIn: "1d" },
     );
@@ -79,7 +80,7 @@ export async function registerHandler(req: Request, res: Response) {
       status: "success",
       message: "Registration is successfully done.",
       user: {
-        id: savedUser._id,
+        id: savedUser.id,
         name: savedUser.name,
         email: savedUser.email,
         isEmailVerified: savedUser.isEmailVerified,
@@ -158,11 +159,18 @@ export async function loginHandler(req: Request, res: Response) {
       });
     }
 
-    const { email, password } = result.data;
+    const { email, password, twoFactorCode } = result.data;
 
     const user = await userModel.findOne({ email });
 
     if (!user) {
+      return res.status(400).json({
+        success: false,
+        message: `Credentials are invalid!`,
+      });
+    }
+
+    if (!compareHash(password, user.passwordHash)) {
       return res.status(400).json({
         success: false,
         message: `Credentials are invalid!`,
@@ -176,23 +184,31 @@ export async function loginHandler(req: Request, res: Response) {
       });
     }
 
-    if (!compareHash(password, user.passwordHash)) {
-      return res.status(400).json({
-        success: false,
-        message: `Credentials are invalid!`,
-      });
+    if (user.twoFactorEnabled) {
+      if (!twoFactorCode || typeof twoFactorCode !== "string") {
+        return res.status(400).json({
+          success: false,
+          message: "Two factor code is required",
+        });
+      }
+
+      if (!user.twoFactorSecret) {
+        return res.status(400).json({
+          success: false,
+          message: "Two factor misconfigured for this account",
+        });
+      }
+
+      // TODO: verify the code using otplib
     }
 
     const accessToken = createAccessToken(
-      user._id.toString(),
+      user.id,
       user.role,
       user.tokenVersion,
     );
 
-    const refreshToken = createRefreshToken(
-      user._id.toString(),
-      user.tokenVersion,
-    );
+    const refreshToken = createRefreshToken(user.id, user.tokenVersion);
 
     res.cookie("refreshToken", refreshToken, {
       httpOnly: true,
@@ -206,7 +222,7 @@ export async function loginHandler(req: Request, res: Response) {
       message: "User logged in successfully",
       accessToken,
       user: {
-        id: user._id,
+        id: user.id,
         email: user.email,
         isEmailVerified: user.isEmailVerified,
         name: user.name,
@@ -253,14 +269,11 @@ export async function refreshHandler(req: Request, res: Response) {
     }
 
     const newAccessToken = createAccessToken(
-      user._id.toString(),
+      user.id,
       user.role,
       user.tokenVersion,
     );
-    const newRefreshToken = createRefreshToken(
-      user._id.toString(),
-      user.tokenVersion,
-    );
+    const newRefreshToken = createRefreshToken(user.id, user.tokenVersion);
 
     res.cookie("refreshToken", newRefreshToken, {
       httpOnly: true,
@@ -274,7 +287,7 @@ export async function refreshHandler(req: Request, res: Response) {
       message: "Token refreshed",
       accessToken: newAccessToken,
       user: {
-        id: user._id,
+        id: user.id,
         email: user.email,
         isEmailVerified: user.isEmailVerified,
         name: user.name,
@@ -507,7 +520,7 @@ export async function googleAuthCallbackHandler(req: Request, res: Response) {
       message: "Google login successfully",
       accessToken,
       user: {
-        id: user._id,
+        id: user.id,
         email: user.email,
         isEmailVerified: user.isEmailVerified,
         name: user.name,
@@ -515,8 +528,56 @@ export async function googleAuthCallbackHandler(req: Request, res: Response) {
         twoFactorEnabled: user.twoFactorEnabled,
       },
     });
+  } catch (error) {
+    console.log("Error: ", (error as Error).message);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+}
 
+export async function twoFASetupHandler(req: Request, res: Response) {
+  const authReq = req as any;
+  const authUser = authReq.user;
 
+  if (!authUser) {
+    return res.status(401).json({
+      success: false,
+      message: "Invalid request, Not authenticated",
+    });
+  }
+
+  try {
+    const user = await userModel.findById(authUser.id);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "Invalid request, user not found!",
+      });
+    }
+
+    const secret = generateSecret();
+    const issuer = "authFlowApp";
+
+    const otpAuthUrl = generateURI({
+      issuer,
+      label: user.email,
+      secret,
+    });
+
+    user.twoFactorSecret = secret;
+    user.twoFactorEnabled = false;
+
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: "2FA setup is done",
+      otpAuthUrl,
+      secret,
+    });
   } catch (error) {
     console.log("Error: ", (error as Error).message);
     return res.status(500).json({
