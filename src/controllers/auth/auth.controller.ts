@@ -17,7 +17,7 @@ import {
 } from "../../lib/token.js";
 import crypto from "crypto";
 import { OAuth2Client } from "google-auth-library";
-import { generateSecret, generateURI } from "otplib";
+import { generateSecret, generateURI, verify } from "otplib";
 
 function getAppUrl(): string {
   return config.APP_URL || `http://localhost:${config.PORT}`;
@@ -577,6 +577,71 @@ export async function twoFASetupHandler(req: Request, res: Response) {
       message: "2FA setup is done",
       otpAuthUrl,
       secret,
+    });
+  } catch (error) {
+    console.log("Error: ", (error as Error).message);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+}
+
+export async function twoFAVerifyHandler(req: Request, res: Response) {
+  const authReq = req as any;
+  const authUser = authReq.user;
+
+  if (!authUser) {
+    return res.status(401).json({
+      success: false,
+      message: "Invalid request, Not authenticated",
+    });
+  }
+
+  try {
+    const { code } = req.body as { code?: string };
+
+    if (!code) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid request, 2FA code is missing",
+      });
+    }
+    const user = await userModel.findById(authUser.id);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "Invalid request, user not found!",
+      });
+    }
+
+    if (!user.twoFactorSecret) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid request, you haven't done 2FA setup yet!",
+      });
+    }
+
+    const isValid = await verify({
+      token: code,
+      secret: user.twoFactorSecret,
+    });
+
+    if (!isValid.valid) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid two factor code",
+      });
+    }
+
+    user.twoFactorEnabled = true;
+    await user.save();
+
+    res.json({
+      success: true,
+      message: "2FA enabled successfully",
+      twoFactorEnabled: true,
     });
   } catch (error) {
     console.log("Error: ", (error as Error).message);
