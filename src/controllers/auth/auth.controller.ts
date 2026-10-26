@@ -559,7 +559,7 @@ export async function twoFASetupHandler(req: Request, res: Response) {
     }
 
     const secret = generateSecret();
-    const issuer = "authFlowApp";
+    const issuer = "AuthFlowApp";
 
     const otpAuthUrl = generateURI({
       issuer,
