@@ -199,7 +199,17 @@ export async function loginHandler(req: Request, res: Response) {
         });
       }
 
-      // TODO: verify the code using otplib
+      const check = await verify({
+        secret: user.twoFactorSecret,
+        token: twoFactorCode,
+      });
+
+      if (!check.valid) {
+        return res.status(400).json({
+          success: false,
+          message: "Two factor misconfigured for this account",
+        });
+      }
     }
 
     const accessToken = createAccessToken(
